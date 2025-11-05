@@ -14,8 +14,6 @@ import zipfile
 from pathlib import Path
 from io import BytesIO
 from typing import List, Tuple, Optional, Dict
-import markdown
-from weasyprint import HTML
 
 # 页面配置
 st.set_page_config(
@@ -119,9 +117,9 @@ Pete: 你好吗？
                     count += 1
         return count
 
-    def process_content(self, content: str, filename: str, progress_callback=None) -> Tuple[str, str, str, int]:
+    def process_content(self, content: str, filename: str, progress_callback=None) -> Tuple[str, str, int]:
         """
-        处理文件内容，返回(markdown_content, txt_content, pdf_bytes, dialogue_count)
+        处理文件内容，返回(markdown_content, txt_content, dialogue_count)
         """
         if progress_callback:
             progress_callback(0.1, "开始翻译...")
@@ -141,12 +139,11 @@ Pete: 你好吗？
         # 生成不同格式
         md_content = self.generate_markdown(translated_content)
         txt_content = self.generate_txt(translated_content)
-        pdf_bytes = self.convert_md_to_pdf_bytes(md_content)
 
         if progress_callback:
             progress_callback(1.0, "完成！")
 
-        return md_content, txt_content, pdf_bytes, dialogue_count
+        return md_content, txt_content, dialogue_count
 
     def generate_markdown(self, content: str) -> str:
         """生成Markdown格式"""
@@ -178,52 +175,9 @@ Pete: 你好吗？
         # 纯文本直接返回，不需要特殊格式
         return content
 
-    def convert_md_to_pdf_bytes(self, md_content: str) -> bytes:
-        """将Markdown转换为PDF字节流"""
-        try:
-            # 转换为HTML
-            html_content = markdown.markdown(md_content)
-
-            # 添加CSS样式
-            styled_html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8">
-                <style>
-                    body {{
-                        font-family: "Arial", "Microsoft YaHei", sans-serif;
-                        line-height: 1.8;
-                        padding: 40px;
-                        font-size: 14px;
-                        color: #333;
-                    }}
-                    p {{
-                        margin: 12px 0;
-                    }}
-                    strong {{
-                        color: #2c3e50;
-                        font-weight: bold;
-                    }}
-                </style>
-            </head>
-            <body>
-                {html_content}
-            </body>
-            </html>
-            """
-
-            # 生成PDF到字节流
-            pdf_file = BytesIO()
-            HTML(string=styled_html).write_pdf(pdf_file)
-            return pdf_file.getvalue()
-
-        except Exception as e:
-            return b""
-
 
 def create_download_zip(results: Dict[str, Dict]) -> bytes:
-    """创建包含所有结果的ZIP文件（包含MD、TXT、PDF三种格式）"""
+    """创建包含所有结果的ZIP文件（包含MD和TXT两种格式）"""
     zip_buffer = BytesIO()
 
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
@@ -237,11 +191,6 @@ def create_download_zip(results: Dict[str, Dict]) -> bytes:
             # 添加TXT文件
             txt_filename = f"{base_name}_translated.txt"
             zip_file.writestr(txt_filename, data['txt'].encode('utf-8'))
-
-            # 添加PDF文件
-            if data['pdf']:
-                pdf_filename = f"{base_name}_translated.pdf"
-                zip_file.writestr(pdf_filename, data['pdf'])
 
     return zip_buffer.getvalue()
 
@@ -291,7 +240,7 @@ def main():
         1. 批量上传文件（最多{MAX_FILES}个）
         2. 每个文件整体发送给API
         3. 自动清理 `[tag]` 语气标签
-        4. 生成MD、TXT、PDF三种格式
+        4. 生成MD和TXT两种格式
         5. 打包下载所有结果
         """)
 
@@ -394,7 +343,7 @@ Sally: 你今天怎么样？""", language="text")
                             progress_text.text(message)
 
                         # 处理文件（一次性翻译）
-                        md_content, txt_content, pdf_bytes, dialogue_count = translator.process_content(
+                        md_content, txt_content, dialogue_count = translator.process_content(
                             content,
                             uploaded_file.name,
                             progress_callback=update_progress
@@ -404,7 +353,6 @@ Sally: 你今天怎么样？""", language="text")
                         results[uploaded_file.name] = {
                             'markdown': md_content,
                             'txt': txt_content,
-                            'pdf': pdf_bytes,
                             'dialogue_count': dialogue_count
                         }
 
@@ -454,7 +402,7 @@ Sally: 你今天怎么样？""", language="text")
                         mime="application/zip",
                         use_container_width=True
                     )
-                    st.info("包含所有的 Markdown、TXT 和 PDF 文件")
+                    st.info("包含所有的 Markdown 和 TXT 文件")
 
                 with col2:
                     st.subheader("📄 单独下载")
@@ -484,16 +432,6 @@ Sally: 你今天怎么样？""", language="text")
                             mime="text/plain",
                             use_container_width=True
                         )
-
-                        # PDF下载
-                        if result['pdf']:
-                            st.download_button(
-                                label="⬇️ 下载 PDF (.pdf)",
-                                data=result['pdf'],
-                                file_name=f"{base_name}_translated.pdf",
-                                mime="application/pdf",
-                                use_container_width=True
-                            )
 
                 # 预览区域
                 st.markdown("---")
@@ -562,7 +500,7 @@ Sally: 你今天怎么样？""", language="text")
             - 🚀 **终极优化**: 1文件=1请求
             - 📄 **大文件支持**: 20万tokens
             - ⚡ **超快速度**: 比逐句快100倍+
-            - 📦 **三种格式**: MD、TXT、PDF
+            - 📦 **两种格式**: MD、TXT
             """)
 
             st.subheader("💡 性能对比")
